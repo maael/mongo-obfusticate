@@ -6,6 +6,8 @@ var MongoClient = require('mongodb').MongoClient
   , generateFakeData = require('../lib/fake-data-generator')
   , extend = require('lodash.assign')
   , obfusticate = require('..')
+  , rewire = require('rewire')
+  , rewiredObfusticate = rewire('..')
   , schemas = {
       'user': {
         'firstName': function () {
@@ -55,6 +57,11 @@ describe('#obfusticate', function () {
   before(function (done) {
     var url = 'mongodb://localhost:27017/mongo-obfusticate-test-' +
       crypto.randomBytes(10).toString('hex')
+
+    rewiredObfusticate.__set__('countRecords', function (collections, db, emitter, callback) {
+      callback(new Error('Something went wrong'))
+    })
+
     MongoClient.connect(url, function (err, dbConnection) {
       if (err) return done(err)
       db = dbConnection
@@ -114,6 +121,23 @@ describe('#obfusticate', function () {
         })
         done()
       })
+    })
+  })
+
+  it('should throw an event whenever an error occurs with no error listener', function (done) {
+    var userFixtures = createUserFixtures(2)
+
+    userCollection.insertMany(userFixtures, function (err) {
+      if (err) return done(err)
+      try {
+        rewiredObfusticate(schemas, db, function (err) {
+          if (err) return done(err)
+          done(new Error('Obfusticate completed without error'))
+        })
+      } catch (e) {
+        assert.equal(e.message, 'Something went wrong')
+        done()
+      }
     })
   })
 
